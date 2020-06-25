@@ -1,31 +1,37 @@
-import telebot
 import mysql.connector
-import constants as const
+import constants as c
 import schedule
-import time
+import asyncio
 import schedule_settings as ss
+from aiogram import Bot, Dispatcher, utils
 
-bot = telebot.TeleBot(const.token)
+bot = Bot(c.token)
+dp = Dispatcher(bot)
+
 
 #  УТОЧНИТЬ
-def send_message(num):
-    conn = mysql.connector.connect(host=const.host, user=const.db_user, passwd=const.password, database=const.db_name)
+async def send_message(num):
+    conn = mysql.connector.connect(host=c.host, user=c.db_user, passwd=c.password, database=c.db_name)
     cursor = conn.cursor(buffered=True)
     get_user_ids = "SELECT user_id FROM notifications WHERE {}=1"
     cursor.execute(get_user_ids.format('n' + str(num)))
     result = cursor.fetchall()
     conn.close()
     for user in result:
-        try: bot.send_message(user[0], const.notifications[num])
-        except telebot.apihelper.ApiException: pass
+        try:
+            await bot.send_message(user[0], c.notifications[num])
+        except utils.exceptions.BotBlocked: pass
+        except utils.exceptions.UserDeactivated: pass
+        except utils.exceptions.ChatNotFound: pass
+
 
 #  УТОЧНИТЬ
-def daily_message(num=None, minutes=None, stop=False):
+async def daily_message(num=None, minutes=None, stop=False):
     if not stop:
         schedule.every(minutes).minutes.do(send_message, num=num).tag(num)
-        send_message(num)
+        await send_message(num)
     else:
-        schedule.clear(num)
+        await schedule.clear(num)
 
 
 # Message_1
@@ -136,8 +142,9 @@ schedule.every().friday.at(ss.at_time_m_17).do(send_message, 17)
 # Message_18
 schedule.every().saturday.at(ss.at_time_m_18).do(send_message, 18)
 
-# Что делает это?
+
 # Это бесконечный цикл в котором функция schedule каждую секунду проверяет текущее время и если оно совпадает с нужным то выполняет нужные действия
-while True:
-    schedule.run_pending()  ################# СДЕЛАТЬ АСИНХРОННЫМ И ВЫЗЫВАТЬ ИЗ ГЛАВНОГО ФАЙЛА
-    time.sleep(1)
+async def loop_schedule():
+    while True:
+        await schedule.run_pending()
+        await asyncio.sleep(1)
